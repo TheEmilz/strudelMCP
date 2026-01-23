@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Strudel Embed Test</title>
+  <script src="https://unpkg.com/@strudel/embed@latest"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      background: #1a1a1a;
+      color: #fff;
+    }
+    #strudel-container {
+      margin: 20px 0;
+      border: 2px solid #444;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .controls {
+      margin: 20px 0;
+    }
+    button {
+      padding: 10px 20px;
+      margin: 5px;
+      font-size: 16px;
+      cursor: pointer;
+      background: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 4px;
+    }
+    button:hover {
+      background: #45a049;
+    }
+    .info {
+      background: #333;
+      padding: 15px;
+      border-radius: 4px;
+      margin: 10px 0;
+    }
+  </style>
+</head>
+<body>
+  <h1>Strudel Embedded REPL Test</h1>
+  
+  <div class="info">
+    <h2>Test Instructions</h2>
+    <p>This page contains an embedded Strudel REPL for testing the MCP server's browser automation.</p>
+    <ul>
+      <li>The embedded editor should be visible below</li>
+      <li>Use the MCP server to write patterns to this editor</li>
+      <li>Test play/stop controls via automation</li>
+      <li>Verify pattern persistence and manipulation</li>
+    </ul>
+  </div>
+
+  <div id="strudel-container">
+    <strudel-repl>
+// Welcome to Strudel!
+// Try this pattern:
+s("bd hh sd hh")
+    </strudel-repl>
+  </div>
+
+  <div class="controls">
+    <h3>Manual Controls (for reference)</h3>
+    <button id="playBtn">▶ Play</button>
+    <button id="stopBtn">⏹ Stop</button>
+    <button id="clearBtn">🗑 Clear</button>
+  </div>
+
+  <div class="info">
+    <h3>Current Pattern:</h3>
+    <pre id="patternDisplay">Loading...</pre>
+  </div>
+
+  <script>
+    // Get reference to the strudel-repl element
+    const repl = document.querySelector('strudel-repl');
+    const patternDisplay = document.getElementById('patternDisplay');
+
+    // Manual control handlers (for testing)
+    document.getElementById('playBtn').addEventListener('click', () => {
+      repl.play();
+    });
+
+    document.getElementById('stopBtn').addEventListener('click', () => {
+      repl.stop();
+    });
+
+    document.getElementById('clearBtn').addEventListener('click', () => {
+      repl.setCode('');
+    });
+
+    // Monitor pattern changes
+    setInterval(() => {
+      if (repl && repl.getCode) {
+        patternDisplay.textContent = repl.getCode() || '(empty)';
+      }
+    }, 1000);
+
+    // Log initialization
+    console.log('Strudel embed test page loaded');
+    console.log('REPL element:', repl);
+  </script>
+</body>
+</html>
