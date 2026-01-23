@@ -11,6 +11,9 @@ dist/
 # Allow test files
 !tests/**/*.js
 
+# Allow sokolov_repertoire files
+!sokolov_repertoire/**/*.js
+
 # Logs
 logs/
 *.log
