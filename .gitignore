@@ -8,6 +8,9 @@ dist/
 *.d.ts
 *.d.ts.map
 
+# Allow test files
+!tests/**/*.js
+
 # Logs
 logs/
 *.log
