@@ -1,0 +1,48 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+*.js
+*.js.map
+*.d.ts
+*.d.ts.map
+
+# Allow test files
+!tests/**/*.js
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Environment variables
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Testing
+coverage/
+.nyc_output/
+
+# Playwright
+playwright-report/
+test-results/
+.playwright/
+
+# Patterns storage
+patterns/*.json
+!patterns/examples/
+
+# Temporary files
+tmp/
+*.tmp
