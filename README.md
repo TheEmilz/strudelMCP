@@ -43,6 +43,7 @@ A Model Context Protocol (MCP) server for [Strudel](https://strudel.cc/), enabli
 
 - Node.js 18.0.0 or higher
 - npm or yarn
+- Docker and Docker Compose (optional, for containerized deployment)
 
 ### From Source
 
@@ -61,9 +62,20 @@ npx playwright install chromium
 npm run build
 ```
 
+### Using Docker
+
+```bash
+# Clone the repository
+git clone https://github.com/TheEmilz/strudelMCP.git
+cd strudelMCP
+
+# Start with Docker Compose
+docker-compose up -d
+```
+
 ## Usage
 
-### As MCP Server
+### As MCP Server (stdio)
 
 Add to your MCP client configuration (e.g., Claude Desktop):
 
@@ -76,6 +88,61 @@ Add to your MCP client configuration (e.g., Claude Desktop):
     }
   }
 }
+```
+
+### As Docker Container
+
+The server can also run in a Docker container and be accessed via HTTP/SSE, making it accessible from external agents.
+
+#### Using Docker Compose (Recommended)
+
+```bash
+# Start the server
+docker-compose up -d
+
+# View logs
+docker-compose logs -f
+
+# Stop the server
+docker-compose down
+```
+
+The server will be available at:
+- HTTP endpoint: `http://localhost:3000`
+- SSE endpoint: `http://localhost:3000/sse`
+- Health check: `http://localhost:3000/health`
+
+#### Using Docker directly
+
+```bash
+# Build the image
+docker build -t strudel-mcp-server .
+
+# Run the container
+docker run -d \
+  -p 3000:3000 \
+  -v $(pwd)/patterns:/app/patterns \
+  -e STRUDEL_HEADLESS=true \
+  -e STRUDEL_TRANSPORT=http \
+  --name strudel-mcp \
+  strudel-mcp-server
+```
+
+#### Environment Variables
+
+- `STRUDEL_TRANSPORT`: Transport mode (`stdio` or `http`). Default: `stdio`
+- `STRUDEL_PORT`: HTTP server port (only for HTTP transport). Default: `3000`
+- `STRUDEL_HEADLESS`: Run browser in headless mode. Default: `false`
+- `STRUDEL_URL`: Strudel URL to connect to. Default: `https://strudel.cc/`
+- `NODE_ENV`: Node environment. Default: `development`
+
+### Connecting to Docker MCP Server
+
+When running in Docker with HTTP transport, you can connect to the MCP server using the SSE endpoints:
+
+```
+SSE Connection: http://localhost:3000/sse
+POST Messages: http://localhost:3000/messages?sessionId=<session-id>
 ```
 
 ### Example Workflow
@@ -147,6 +214,9 @@ npm run lint
 
 ## Architecture
 
+The server supports two transport modes:
+
+### stdio Transport (Default)
 ```
 ┌─────────────────────────────────────┐
 │         MCP Client (AI)             │
@@ -168,9 +238,38 @@ npm run lint
 └────────┘    └────────────┘
 ```
 
+### HTTP/SSE Transport (Docker)
+```
+┌─────────────────────────────────────┐
+│    External MCP Client (Agent)      │
+└────────────┬────────────────────────┘
+             │ HTTP/SSE
+┌────────────▼────────────────────────┐
+│   Docker Container                  │
+│  ┌────────────────────────────────┐ │
+│  │  Express HTTP Server + SSE     │ │
+│  │  (Port 3000)                   │ │
+│  └──────────┬─────────────────────┘ │
+│  ┌──────────▼─────────────────────┐ │
+│  │   MCP Server (index.ts)        │ │
+│  │  ┌──────────────────────────┐  │ │
+│  │  │  Tool Request Handler    │  │ │
+│  │  └────────┬─────────────────┘  │ │
+│  └───────────┼────────────────────┘ │
+└──────────────┼──────────────────────┘
+               │
+       ┌───────┴────────┐
+       │                │
+   ┌───▼────┐    ┌─────▼──────┐
+   │ Browser│    │  Storage   │
+   │ (Play- │    │  (Pattern  │
+   │ wright)│    │   files)   │
+   └────────┘    └────────────┘
+```
+
 ### Components
 
-- **index.ts** - MCP server entry point with stdio transport
+- **index.ts** - MCP server entry point with stdio and HTTP/SSE transports
 - **browser.ts** - Playwright-based browser automation
 - **tools.ts** - MCP tool definitions and handlers
 - **storage.ts** - Pattern persistence and management
