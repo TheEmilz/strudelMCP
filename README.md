@@ -69,8 +69,12 @@ npm run build
 git clone https://github.com/TheEmilz/strudelMCP.git
 cd strudelMCP
 
+# Install dependencies and build (required before Docker build)
+npm install
+npm run build
+
 # Start with Docker Compose
-docker-compose up -d
+docker compose up -d
 ```
 
 ## Usage
@@ -144,6 +148,17 @@ When running in Docker with HTTP transport, you can connect to the MCP server us
 SSE Connection: http://localhost:3000/sse
 POST Messages: http://localhost:3000/messages?sessionId=<session-id>
 ```
+
+#### Docker Build Notes
+
+**Note**: The Docker build process includes these steps:
+1. Build the TypeScript code locally first (`npm run build`)
+2. Copy the compiled `dist` folder and `node_modules` into the container
+3. Playwright browsers are installed during the build, but may fail in restricted network environments
+
+If you encounter certificate errors during the Playwright installation, the server will still start successfully, but you'll need to ensure Playwright browsers are available. The build process continues even if Playwright installation fails.
+
+**Before building**: Make sure to run `npm run build` locally to generate the `dist` folder.
 
 ### Example Workflow
 

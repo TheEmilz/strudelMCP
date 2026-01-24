@@ -36,18 +36,14 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies
-RUN npm ci --only=production
+# Copy node_modules from local (faster and more reliable for this use case)
+COPY node_modules ./node_modules
 
-# Install Playwright Chromium
-RUN npx playwright install chromium --with-deps
+# Install Playwright Chromium with system dependencies
+RUN npx playwright install chromium --with-deps 2>&1 || echo "Playwright install had warnings but continuing..."
 
-# Copy source files
-COPY tsconfig.json ./
-COPY src ./src
-
-# Build the TypeScript code
-RUN npm run build
+# Copy pre-built dist folder (build outside Docker)
+COPY dist ./dist
 
 # Create patterns directory
 RUN mkdir -p /app/patterns

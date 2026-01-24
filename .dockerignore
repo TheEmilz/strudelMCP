@@ -1,15 +1,11 @@
-# Dependencies
-node_modules/
+# Dependencies - commented out to allow copying for Docker
+# node_modules/
 
-# Build output
-dist/
-*.js
+# Build output - but allow dist for Docker
+# dist/
 *.js.map
 *.d.ts
 *.d.ts.map
-
-# Allow build after copy
-!dist/
 
 # Git
 .git/
