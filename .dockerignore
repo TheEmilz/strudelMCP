@@ -1,0 +1,57 @@
+# Dependencies - commented out to allow copying for Docker
+# node_modules/
+
+# Build output - but allow dist for Docker
+# dist/
+*.js.map
+*.d.ts
+*.d.ts.map
+
+# Git
+.git/
+.gitignore
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Environment variables
+.env.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Testing
+coverage/
+.nyc_output/
+tests/
+playwright-report/
+test-results/
+.playwright/
+
+# Patterns storage (will be volume mounted)
+patterns/*.json
+
+# Temporary files
+tmp/
+*.tmp
+
+# Documentation
+*.md
+!README.md
+
+# Docker files
+Dockerfile
+.dockerignore
+docker-compose.yml
+
+# CI/CD
+.github/
