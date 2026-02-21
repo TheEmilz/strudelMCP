@@ -18,6 +18,9 @@ import { StrudelBrowser } from './browser.js';
 import { PatternStorage } from './storage.js';
 import { StrudelTools } from './tools.js';
 
+const SERVER_NAME = 'strudel-mcp-server';
+const SERVER_VERSION = '1.0.0';
+
 class StrudelMCPServer {
   private server: Server;
   private browser: StrudelBrowser;
@@ -27,8 +30,8 @@ class StrudelMCPServer {
   constructor(headless: boolean = false) {
     this.server = new Server(
       {
-        name: 'strudel-mcp-server',
-        version: '1.0.0',
+        name: SERVER_NAME,
+        version: SERVER_VERSION,
       },
       {
         capabilities: {
@@ -46,16 +49,15 @@ class StrudelMCPServer {
     this.setupErrorHandling();
   }
 
-  private setupHandlers(): void {
-    // List available tools
-    this.server.setRequestHandler(ListToolsRequestSchema, async () => {
+  private registerToolHandlers(target: Server): void {
+    target.setRequestHandler(ListToolsRequestSchema, async () => {
       const toolDefs = this.tools.getTools();
       return {
         tools: toolDefs.map((tool) => ({
           name: tool.name,
           description: tool.description,
           inputSchema: {
-            type: 'object',
+            type: 'object' as const,
             properties: tool.inputSchema.shape,
             required: Object.keys(tool.inputSchema.shape).filter(
               (key) => !tool.inputSchema.shape[key].isOptional()
@@ -65,34 +67,18 @@ class StrudelMCPServer {
       };
     });
 
-    // Handle tool calls
-    this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
+    target.setRequestHandler(CallToolRequestSchema, async (request) => {
       const { name, arguments: args } = request.params;
-
       const toolDefs = this.tools.getTools();
       const tool = toolDefs.find((t) => t.name === name);
-
       if (!tool) {
-        throw new McpError(
-          ErrorCode.MethodNotFound,
-          `Unknown tool: ${name}`
-        );
+        throw new McpError(ErrorCode.MethodNotFound, `Unknown tool: ${name}`);
       }
-
       try {
-        // Validate input
         const validatedArgs = tool.inputSchema.parse(args);
-        
-        // Execute tool
         const result = await tool.handler(validatedArgs);
-
         return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
+          content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
         };
       } catch (error) {
         if (error instanceof Error) {
@@ -104,6 +90,10 @@ class StrudelMCPServer {
         throw error;
       }
     });
+  }
+
+  private setupHandlers(): void {
+    this.registerToolHandlers(this.server);
   }
 
   private setupErrorHandling(): void {
@@ -141,7 +131,7 @@ class StrudelMCPServer {
 
     // Health check endpoint
     app.get('/health', (_req: Request, res: Response) => {
-      res.json({ status: 'ok', version: '1.0.0' });
+      res.json({ status: 'ok', version: SERVER_VERSION });
     });
 
     // SSE endpoint for establishing the stream
@@ -230,7 +220,7 @@ class StrudelMCPServer {
     app.get('/health', (_req: Request, res: Response) => {
       res.json({
         status: 'ok',
-        version: '1.0.0',
+        version: SERVER_VERSION,
         transport: 'streamable-http',
         mcpEndpoint: '/mcp',
       });
@@ -266,41 +256,10 @@ class StrudelMCPServer {
 
           // Connect a new Server instance per session for isolation
           const sessionServer = new Server(
-            { name: 'strudel-mcp-server', version: '1.0.0' },
+            { name: SERVER_NAME, version: SERVER_VERSION },
             { capabilities: { tools: {} } }
           );
-
-          // Register the same handlers on the session server
-          sessionServer.setRequestHandler(ListToolsRequestSchema, async () => {
-            const toolDefs = this.tools.getTools();
-            return {
-              tools: toolDefs.map((tool) => ({
-                name: tool.name,
-                description: tool.description,
-                inputSchema: {
-                  type: 'object' as const,
-                  properties: tool.inputSchema.shape,
-                  required: Object.keys(tool.inputSchema.shape).filter(
-                    (key) => !tool.inputSchema.shape[key].isOptional()
-                  ),
-                },
-              })),
-            };
-          });
-
-          sessionServer.setRequestHandler(CallToolRequestSchema, async (request) => {
-            const { name, arguments: args } = request.params;
-            const toolDefs = this.tools.getTools();
-            const tool = toolDefs.find((t) => t.name === name);
-            if (!tool) {
-              throw new McpError(ErrorCode.MethodNotFound, `Unknown tool: ${name}`);
-            }
-            const validatedArgs = tool.inputSchema.parse(args);
-            const result = await tool.handler(validatedArgs);
-            return {
-              content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-            };
-          });
+          this.registerToolHandlers(sessionServer);
 
           await sessionServer.connect(transport);
           await transport.handleRequest(req, res, req.body);
