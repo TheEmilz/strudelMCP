@@ -134,11 +134,57 @@ docker run -d \
 
 #### Environment Variables
 
-- `STRUDEL_TRANSPORT`: Transport mode (`stdio` or `http`). Default: `stdio`
-- `STRUDEL_PORT`: HTTP server port (only for HTTP transport). Default: `3000`
+- `STRUDEL_TRANSPORT`: Transport mode (`stdio`, `http`, or `streamable-http`/`web`). Default: `stdio`
+- `STRUDEL_PORT`: HTTP server port (only for HTTP transports). Default: `3000`
 - `STRUDEL_HEADLESS`: Run browser in headless mode. Default: `false`
 - `STRUDEL_URL`: Strudel URL to connect to. Default: `https://strudel.cc/`
 - `NODE_ENV`: Node environment. Default: `development`
+
+### Using with Chrome webMCP (Streamable HTTP)
+
+The server supports the MCP Streamable HTTP transport, which is compatible with Google Chrome's webMCP feature available in Chrome Beta for developers. This allows browser-based AI agents to connect directly to the Strudel MCP server.
+
+#### Start the server in Streamable HTTP mode
+
+```bash
+# From source
+STRUDEL_TRANSPORT=streamable-http STRUDEL_HEADLESS=true node dist/index.js
+
+# Or using 'web' shorthand
+STRUDEL_TRANSPORT=web node dist/index.js
+
+# With custom port
+STRUDEL_TRANSPORT=streamable-http STRUDEL_PORT=8080 node dist/index.js
+```
+
+#### Endpoints
+
+When running in Streamable HTTP mode, the following endpoints are available:
+
+- **`POST /mcp`** - Send JSON-RPC messages (initialize, tool calls)
+- **`GET /mcp`** - Open SSE stream for server-initiated messages (requires `mcp-session-id` header)
+- **`DELETE /mcp`** - Terminate a session (requires `mcp-session-id` header)
+- **`GET /health`** - Health check endpoint
+
+#### CORS Support
+
+The Streamable HTTP transport includes CORS headers to allow cross-origin browser access:
+- `Access-Control-Allow-Origin: *`
+- `Access-Control-Allow-Methods: GET, POST, DELETE, OPTIONS`
+- `Access-Control-Allow-Headers: Content-Type, mcp-session-id, Last-Event-ID`
+- `Access-Control-Expose-Headers: mcp-session-id`
+
+#### Docker with Streamable HTTP
+
+```bash
+docker run -d \
+  -p 3000:3000 \
+  -v $(pwd)/patterns:/app/patterns \
+  -e STRUDEL_HEADLESS=true \
+  -e STRUDEL_TRANSPORT=streamable-http \
+  --name strudel-mcp \
+  strudel-mcp-server
+```
 
 ### Connecting to Docker MCP Server
 
@@ -229,7 +275,7 @@ npm run lint
 
 ## Architecture
 
-The server supports two transport modes:
+The server supports three transport modes:
 
 ### stdio Transport (Default)
 ```
@@ -282,9 +328,40 @@ The server supports two transport modes:
    └────────┘    └────────────┘
 ```
 
+### Streamable HTTP Transport (Chrome webMCP)
+```
+┌─────────────────────────────────────┐
+│  Chrome Beta / Browser MCP Client   │
+│  (webMCP agent)                     │
+└────────────┬────────────────────────┘
+             │ Streamable HTTP (POST/GET/DELETE /mcp)
+             │ + CORS headers
+┌────────────▼────────────────────────┐
+│  Express HTTP Server                │
+│  ┌────────────────────────────────┐ │
+│  │ StreamableHTTPServerTransport  │ │
+│  │ (per-session, stateful)        │ │
+│  └──────────┬─────────────────────┘ │
+│  ┌──────────▼─────────────────────┐ │
+│  │   MCP Server (index.ts)        │ │
+│  │  ┌──────────────────────────┐  │ │
+│  │  │  Tool Request Handler    │  │ │
+│  │  └────────┬─────────────────┘  │ │
+│  └───────────┼────────────────────┘ │
+└──────────────┼──────────────────────┘
+               │
+       ┌───────┴────────┐
+       │                │
+   ┌───▼────┐    ┌─────▼──────┐
+   │ Browser│    │  Storage   │
+   │ (Play- │    │  (Pattern  │
+   │ wright)│    │   files)   │
+   └────────┘    └────────────┘
+```
+
 ### Components
 
-- **index.ts** - MCP server entry point with stdio and HTTP/SSE transports
+- **index.ts** - MCP server entry point with stdio, HTTP/SSE, and Streamable HTTP transports
 - **browser.ts** - Playwright-based browser automation
 - **tools.ts** - MCP tool definitions and handlers
 - **storage.ts** - Pattern persistence and management
