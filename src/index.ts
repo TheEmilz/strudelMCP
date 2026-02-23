@@ -1,12 +1,15 @@
 #!/usr/bin/env node
 
 import { randomUUID } from 'node:crypto';
+import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { createMcpExpressApp } from '@modelcontextprotocol/sdk/server/express.js';
 import { Request, Response } from 'express';
+import express from 'express';
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
@@ -17,6 +20,9 @@ import {
 import { StrudelBrowser } from './browser.js';
 import { PatternStorage } from './storage.js';
 import { StrudelTools } from './tools.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const SERVER_NAME = 'strudel-mcp-server';
 const SERVER_VERSION = '1.0.0';
@@ -216,6 +222,13 @@ class StrudelMCPServer {
       res.status(204).end();
     });
 
+    // Serve the WebMCP client page (for Chrome webMCP / navigator.modelContext)
+    const webmcpDir = path.resolve(__dirname, '..', 'webmcp');
+    app.use('/webmcp', express.static(webmcpDir));
+    app.get('/', (_req: Request, res: Response) => {
+      res.redirect('/webmcp/index.html');
+    });
+
     // Health check endpoint
     app.get('/health', (_req: Request, res: Response) => {
       res.json({
@@ -223,6 +236,7 @@ class StrudelMCPServer {
         version: SERVER_VERSION,
         transport: 'streamable-http',
         mcpEndpoint: '/mcp',
+        webmcpPage: '/webmcp/index.html',
       });
     });
 
@@ -313,7 +327,8 @@ class StrudelMCPServer {
       console.error(`Strudel MCP Server (Streamable HTTP) running on http://0.0.0.0:${port}`);
       console.error(`Health check: http://0.0.0.0:${port}/health`);
       console.error(`MCP endpoint: http://0.0.0.0:${port}/mcp`);
-      console.error('Ready for Chrome webMCP and browser-based MCP clients');
+      console.error(`WebMCP page:  http://0.0.0.0:${port}/webmcp/index.html`);
+      console.error('Open the WebMCP page in Chrome 146+ with chrome://flags/#enable-webmcp-testing enabled');
     });
 
     // Handle shutdown

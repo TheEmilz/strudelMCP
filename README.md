@@ -6,6 +6,7 @@ A Model Context Protocol (MCP) server for [Strudel](https://strudel.cc/), enabli
 
 - 🎹 **16 MCP Tools** for complete Strudel control
 - 🌐 **Browser Automation** via Playwright for real-time interaction
+- 🔌 **WebMCP Support** — client-side `navigator.modelContext` integration for Chrome 146+ AI agents
 - 💾 **Pattern Storage** with tagging and session management
 - 📝 **History Management** with undo/redo support
 - 🔊 **Audio Analysis** (basic features)
@@ -140,35 +141,95 @@ docker run -d \
 - `STRUDEL_URL`: Strudel URL to connect to. Default: `https://strudel.cc/`
 - `NODE_ENV`: Node environment. Default: `development`
 
-### Using with Chrome webMCP (Streamable HTTP)
+### Using with Chrome WebMCP (navigator.modelContext)
 
-The server supports the MCP Streamable HTTP transport, which is compatible with Google Chrome's webMCP feature available in Chrome Beta for developers. This allows browser-based AI agents to connect directly to the Strudel MCP server.
+[WebMCP](https://github.com/webmachinelearning/webmcp) is a proposed web standard by Google that exposes structured tools to AI agents directly in the browser via the `navigator.modelContext` API. strudelMCP includes a ready-to-use WebMCP client page that registers all Strudel tools so Chrome's AI agent can compose music.
 
-#### Start the server in Streamable HTTP mode
+#### Requirements
+
+- **Chrome** version 146.0.7672.0 or higher
+- Enable the flag: `chrome://flags/#enable-webmcp-testing` → **Enabled**, then relaunch Chrome
+- Optionally: install the [Model Context Tool Inspector Extension](https://chromewebstore.google.com/detail/model-context-tool-inspec/gbpdfapgefenggkahomfgkhfehlcenpd) to inspect and test tools
+
+#### Quick start
 
 ```bash
-# From source
-STRUDEL_TRANSPORT=streamable-http STRUDEL_HEADLESS=true node dist/index.js
+# 1. Build the project
+npm run build
 
-# Or using 'web' shorthand
-STRUDEL_TRANSPORT=web node dist/index.js
+# 2. Start the server in streamable-http mode
+STRUDEL_TRANSPORT=streamable-http node dist/index.js
 
-# With custom port
-STRUDEL_TRANSPORT=streamable-http STRUDEL_PORT=8080 node dist/index.js
+# 3. Open in Chrome 146+ with the webMCP flag enabled
+#    Navigate to: http://localhost:3000/webmcp/index.html
+```
+
+The WebMCP page embeds the Strudel REPL and registers 8 tools via `navigator.modelContext.provideContext()`:
+
+| Tool | Description |
+|------|-------------|
+| `write_pattern` | Write a Strudel pattern to the editor |
+| `get_pattern` | Read the current pattern from the editor |
+| `play_pattern` | Start audio playback |
+| `stop_pattern` | Stop audio playback |
+| `clear_editor` | Clear all code from the editor |
+| `append_pattern` | Append code to the end of the current pattern |
+| `replace_text` | Find and replace text in the current pattern |
+| `get_status` | Get current editor and playback status |
+
+#### How it works
+
+The WebMCP page (`webmcp/index.html`) uses the **imperative API**:
+
+```javascript
+navigator.modelContext.provideContext({
+  tools: [
+    {
+      name: 'write_pattern',
+      description: 'Write a Strudel pattern to the editor...',
+      inputSchema: { type: 'object', properties: { pattern: { type: 'string' } }, required: ['pattern'] },
+      execute: async ({ pattern }) => {
+        // Interacts with the embedded CodeMirror editor
+        return { content: [{ type: 'text', text: `Pattern written` }] };
+      }
+    },
+    // ... more tools
+  ]
+});
+```
+
+The Chrome AI agent can then discover and call these tools directly from the browser — no server-side MCP transport needed for the tool interaction itself.
+
+#### Testing with the Model Context Tool Inspector Extension
+
+1. Install the [extension](https://chromewebstore.google.com/detail/model-context-tool-inspec/gbpdfapgefenggkahomfgkhfehlcenpd)
+2. Open `http://localhost:3000/webmcp/index.html` in Chrome 146+
+3. Click the extension icon to see registered tools
+4. Execute tools manually, or provide a Gemini API key to test with natural language prompts
+
+### Streamable HTTP Transport (MCP Protocol)
+
+The server also supports the MCP Streamable HTTP transport for programmatic MCP clients.
+
+#### Start the server
+
+```bash
+STRUDEL_TRANSPORT=streamable-http node dist/index.js
+# Or: STRUDEL_TRANSPORT=web node dist/index.js
 ```
 
 #### Endpoints
 
-When running in Streamable HTTP mode, the following endpoints are available:
-
-- **`POST /mcp`** - Send JSON-RPC messages (initialize, tool calls)
-- **`GET /mcp`** - Open SSE stream for server-initiated messages (requires `mcp-session-id` header)
-- **`DELETE /mcp`** - Terminate a session (requires `mcp-session-id` header)
-- **`GET /health`** - Health check endpoint
+- **`GET /`** — Redirects to WebMCP client page
+- **`GET /webmcp/index.html`** — WebMCP client page (for Chrome's AI agent)
+- **`POST /mcp`** — JSON-RPC messages (initialize, tool calls)
+- **`GET /mcp`** — SSE stream for server-initiated messages (requires `mcp-session-id` header)
+- **`DELETE /mcp`** — Terminate a session (requires `mcp-session-id` header)
+- **`GET /health`** — Health check endpoint
 
 #### CORS Support
 
-The Streamable HTTP transport includes CORS headers to allow cross-origin browser access:
+The Streamable HTTP transport includes CORS headers for cross-origin browser access:
 - `Access-Control-Allow-Origin: *`
 - `Access-Control-Allow-Methods: GET, POST, DELETE, OPTIONS`
 - `Access-Control-Allow-Headers: Content-Type, mcp-session-id, Last-Event-ID`
@@ -257,6 +318,8 @@ The project includes 10+ test files:
 - `tests/unit/schemas.test.js` - Schema validation tests
 - `tests/unit/history.test.js` - History management tests
 - `tests/unit/patterns.test.js` - Pattern examples tests
+- `tests/unit/streamable-http.test.js` - Streamable HTTP transport tests
+- `tests/unit/webmcp.test.js` - WebMCP client page tests
 
 #### Integration Tests
 - `tests/integration/browser.test.js` - Browser integration tests

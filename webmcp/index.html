@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Strudel WebMCP — AI Agent Live Coding</title>
+  <script src="https://unpkg.com/@strudel/embed@latest"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #111;
+      color: #e0e0e0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    header {
+      padding: 12px 20px;
+      background: #1a1a2e;
+      border-bottom: 1px solid #333;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    header h1 {
+      font-size: 18px;
+      font-weight: 600;
+    }
+    header .badge {
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 10px;
+      background: #4CAF50;
+      color: #fff;
+      font-weight: 500;
+    }
+    #status-bar {
+      padding: 8px 20px;
+      background: #1e1e1e;
+      font-size: 12px;
+      color: #888;
+      border-bottom: 1px solid #292929;
+      display: flex;
+      gap: 16px;
+    }
+    #status-bar .status-item { display: flex; align-items: center; gap: 4px; }
+    #status-bar .dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      display: inline-block;
+    }
+    #status-bar .dot.green { background: #4CAF50; }
+    #status-bar .dot.yellow { background: #FFC107; }
+    #status-bar .dot.red { background: #f44336; }
+    #strudel-container {
+      flex: 1;
+      min-height: 400px;
+      position: relative;
+    }
+    #strudel-container strudel-repl {
+      width: 100%;
+      height: 100%;
+    }
+    #log {
+      max-height: 120px;
+      overflow-y: auto;
+      background: #0d0d0d;
+      padding: 8px 20px;
+      font-family: 'Menlo', 'Consolas', monospace;
+      font-size: 11px;
+      color: #777;
+      border-top: 1px solid #292929;
+    }
+    #log .entry { padding: 1px 0; }
+    #log .entry.success { color: #4CAF50; }
+    #log .entry.error { color: #f44336; }
+    #log .entry.info { color: #64B5F6; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>🎵 Strudel WebMCP</h1>
+    <span class="badge" id="webmcp-badge">checking…</span>
+  </header>
+  <div id="status-bar">
+    <span class="status-item"><span class="dot yellow" id="dot-webmcp"></span> WebMCP</span>
+    <span class="status-item"><span class="dot yellow" id="dot-editor"></span> Editor</span>
+    <span class="status-item"><span class="dot yellow" id="dot-playback"></span> Playback: stopped</span>
+    <span class="status-item" id="tools-count">Tools: 0</span>
+  </div>
+
+  <div id="strudel-container">
+    <strudel-repl id="strudel-repl">
+// Welcome to Strudel WebMCP!
+// An AI agent can compose music here.
+s("bd hh sd hh")
+    </strudel-repl>
+  </div>
+
+  <div id="log"></div>
+
+  <script>
+    // ── Utility ──────────────────────────────────────────────
+    const logEl = document.getElementById('log');
+    function log(msg, type = '') {
+      const entry = document.createElement('div');
+      entry.className = 'entry ' + type;
+      entry.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+      logEl.appendChild(entry);
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    // ── Editor helpers ───────────────────────────────────────
+    const repl = document.getElementById('strudel-repl');
+    let isPlaying = false;
+
+    function getEditorView() {
+      const cmEditor = repl?.shadowRoot
+        ? repl.shadowRoot.querySelector('.cm-editor')
+        : document.querySelector('.cm-editor');
+      return cmEditor?.cmView?.view ?? cmEditor?.view ?? null;
+    }
+
+    function getCode() {
+      const view = getEditorView();
+      if (view) return view.state.doc.toString();
+      if (repl?.getCode) return repl.getCode();
+      return '';
+    }
+
+    function setCode(code) {
+      const view = getEditorView();
+      if (view) {
+        view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: code } });
+        return true;
+      }
+      if (repl?.setCode) { repl.setCode(code); return true; }
+      return false;
+    }
+
+    // ── Wait for editor to be ready ──────────────────────────
+    function waitForEditor(timeout = 15000) {
+      return new Promise((resolve, reject) => {
+        const start = Date.now();
+        const check = () => {
+          if (getEditorView() || (repl?.getCode)) {
+            document.getElementById('dot-editor').className = 'dot green';
+            resolve();
+          } else if (Date.now() - start > timeout) {
+            document.getElementById('dot-editor').className = 'dot red';
+            reject(new Error('Editor did not initialize within timeout'));
+          } else {
+            setTimeout(check, 200);
+          }
+        };
+        check();
+      });
+    }
+
+    // ── WebMCP tool registration ─────────────────────────────
+    async function registerWebMCPTools() {
+      if (!navigator.modelContext) {
+        document.getElementById('webmcp-badge').textContent = 'not available';
+        document.getElementById('dot-webmcp').className = 'dot red';
+        log('navigator.modelContext not available — enable chrome://flags/#enable-webmcp-testing in Chrome 146+', 'error');
+        return;
+      }
+
+      log('navigator.modelContext detected — registering tools…', 'info');
+      document.getElementById('dot-webmcp').className = 'dot green';
+      document.getElementById('webmcp-badge').textContent = 'active';
+
+      const tools = [
+        {
+          name: 'write_pattern',
+          description: 'Write a Strudel live-coding pattern to the editor, replacing any existing content. Use Strudel/Tidal syntax (e.g. s("bd hh sd hh"), note("c3 e3 g3").s("piano")).',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              pattern: {
+                type: 'string',
+                description: 'The complete Strudel pattern code to write into the editor'
+              }
+            },
+            required: ['pattern']
+          },
+          execute: async ({ pattern }) => {
+            await waitForEditor();
+            const ok = setCode(pattern);
+            if (!ok) return { content: [{ type: 'text', text: 'Error: editor not ready' }] };
+            log(`write_pattern: ${pattern.substring(0, 60)}…`, 'success');
+            return { content: [{ type: 'text', text: `Pattern written to editor:\n${pattern}` }] };
+          }
+        },
+        {
+          name: 'get_pattern',
+          description: 'Read the current Strudel pattern code from the editor.',
+          inputSchema: { type: 'object', properties: {} },
+          execute: async () => {
+            await waitForEditor();
+            const code = getCode();
+            log('get_pattern: read current code', 'info');
+            return { content: [{ type: 'text', text: code || '(editor is empty)' }] };
+          }
+        },
+        {
+          name: 'play_pattern',
+          description: 'Start audio playback of the current pattern in the editor.',
+          inputSchema: { type: 'object', properties: {} },
+          execute: async () => {
+            await waitForEditor();
+            try {
+              if (repl?.play) {
+                repl.play();
+              } else {
+                const btn = document.querySelector('button[title*="play" i], button[aria-label*="play" i]');
+                if (btn) btn.click();
+                else document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', ctrlKey: true }));
+              }
+              isPlaying = true;
+              document.getElementById('dot-playback').className = 'dot green';
+              document.querySelector('#status-bar .status-item:nth-child(3)').textContent = '▶ Playing';
+              log('play_pattern: playback started', 'success');
+              return { content: [{ type: 'text', text: 'Playback started.' }] };
+            } catch (e) {
+              log(`play_pattern error: ${e.message}`, 'error');
+              return { content: [{ type: 'text', text: `Error starting playback: ${e.message}` }] };
+            }
+          }
+        },
+        {
+          name: 'stop_pattern',
+          description: 'Stop audio playback.',
+          inputSchema: { type: 'object', properties: {} },
+          execute: async () => {
+            try {
+              if (repl?.stop) {
+                repl.stop();
+              } else {
+                const btn = document.querySelector('button[title*="stop" i], button[aria-label*="stop" i]');
+                if (btn) btn.click();
+                else document.dispatchEvent(new KeyboardEvent('keydown', { key: '.', ctrlKey: true }));
+              }
+              isPlaying = false;
+              document.getElementById('dot-playback').className = 'dot yellow';
+              document.querySelector('#status-bar .status-item:nth-child(3)').textContent = 'Playback: stopped';
+              log('stop_pattern: playback stopped', 'success');
+              return { content: [{ type: 'text', text: 'Playback stopped.' }] };
+            } catch (e) {
+              log(`stop_pattern error: ${e.message}`, 'error');
+              return { content: [{ type: 'text', text: `Error stopping playback: ${e.message}` }] };
+            }
+          }
+        },
+        {
+          name: 'clear_editor',
+          description: 'Clear all code from the Strudel editor.',
+          inputSchema: { type: 'object', properties: {} },
+          execute: async () => {
+            await waitForEditor();
+            setCode('');
+            log('clear_editor: editor cleared', 'success');
+            return { content: [{ type: 'text', text: 'Editor cleared.' }] };
+          }
+        },
+        {
+          name: 'append_pattern',
+          description: 'Append code to the end of the current pattern, on a new line.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              code: {
+                type: 'string',
+                description: 'The Strudel code to append after the existing content'
+              }
+            },
+            required: ['code']
+          },
+          execute: async ({ code }) => {
+            await waitForEditor();
+            const current = getCode();
+            const updated = current + '\n' + code;
+            setCode(updated);
+            log(`append_pattern: appended ${code.substring(0, 40)}…`, 'success');
+            return { content: [{ type: 'text', text: `Code appended. Full pattern:\n${updated}` }] };
+          }
+        },
+        {
+          name: 'replace_text',
+          description: 'Find and replace text in the current pattern.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              search: {
+                type: 'string',
+                description: 'The text to find in the current pattern'
+              },
+              replacement: {
+                type: 'string',
+                description: 'The text to replace it with'
+              }
+            },
+            required: ['search', 'replacement']
+          },
+          execute: async ({ search, replacement }) => {
+            await waitForEditor();
+            const current = getCode();
+            if (!current.includes(search)) {
+              log(`replace_text: "${search}" not found`, 'error');
+              return { content: [{ type: 'text', text: `Text "${search}" not found in the current pattern.` }] };
+            }
+            const updated = current.replace(search, replacement);
+            setCode(updated);
+            log(`replace_text: "${search}" → "${replacement}"`, 'success');
+            return { content: [{ type: 'text', text: `Replaced "${search}" with "${replacement}". Updated pattern:\n${updated}` }] };
+          }
+        },
+        {
+          name: 'get_status',
+          description: 'Get the current status of the Strudel editor and playback.',
+          inputSchema: { type: 'object', properties: {} },
+          execute: async () => {
+            const editorReady = !!(getEditorView() || repl?.getCode);
+            const code = editorReady ? getCode() : '';
+            const status = {
+              editorReady,
+              isPlaying,
+              patternLength: code.length,
+              lineCount: code ? code.split('\n').length : 0,
+              currentPattern: code || '(empty)',
+            };
+            log('get_status: queried', 'info');
+            return { content: [{ type: 'text', text: JSON.stringify(status, null, 2) }] };
+          }
+        }
+      ];
+
+      // Register all tools via provideContext (batch registration)
+      navigator.modelContext.provideContext({ tools });
+
+      document.getElementById('tools-count').textContent = `Tools: ${tools.length}`;
+      log(`Registered ${tools.length} WebMCP tools: ${tools.map(t => t.name).join(', ')}`, 'success');
+    }
+
+    // ── Bootstrap ────────────────────────────────────────────
+    (async () => {
+      log('Initializing Strudel WebMCP page…', 'info');
+      try {
+        await waitForEditor();
+        log('Editor ready', 'success');
+      } catch (e) {
+        log(e.message, 'error');
+      }
+      registerWebMCPTools();
+    })();
+  </script>
+</body>
+</html>
