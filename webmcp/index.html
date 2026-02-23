@@ -85,7 +85,7 @@
   <div id="status-bar">
     <span class="status-item"><span class="dot yellow" id="dot-webmcp"></span> WebMCP</span>
     <span class="status-item"><span class="dot yellow" id="dot-editor"></span> Editor</span>
-    <span class="status-item"><span class="dot yellow" id="dot-playback"></span> Playback: stopped</span>
+    <span class="status-item"><span class="dot yellow" id="dot-playback"></span> <span id="playback-text">Playback: stopped</span></span>
     <span class="status-item" id="tools-count">Tools: 0</span>
   </div>
 
@@ -219,7 +219,7 @@ s("bd hh sd hh")
               }
               isPlaying = true;
               document.getElementById('dot-playback').className = 'dot green';
-              document.querySelector('#status-bar .status-item:nth-child(3)').textContent = '▶ Playing';
+              document.getElementById('playback-text').textContent = '▶ Playing';
               log('play_pattern: playback started', 'success');
               return { content: [{ type: 'text', text: 'Playback started.' }] };
             } catch (e) {
@@ -243,7 +243,7 @@ s("bd hh sd hh")
               }
               isPlaying = false;
               document.getElementById('dot-playback').className = 'dot yellow';
-              document.querySelector('#status-bar .status-item:nth-child(3)').textContent = 'Playback: stopped';
+              document.getElementById('playback-text').textContent = 'Playback: stopped';
               log('stop_pattern: playback stopped', 'success');
               return { content: [{ type: 'text', text: 'Playback stopped.' }] };
             } catch (e) {
